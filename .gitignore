@@ -1,0 +1,19 @@
+# Ignore virtual environment
+pets_env/
+
+# Ignore dataset files
+data/
+
+# Ignore Python cache and other common files
+__pycache__/
+*.pyc
+
+# Ignore Jupyter Notebook checkpoints (if used)
+.ipynb_checkpoints/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore IDE-specific files (e.g., for VSCode)
+.vscode/
