@@ -1,6 +1,5 @@
-# src/compare_models.py
-
 import torch
+from transformers import DetrForObjectDetection, DetrImageProcessor
 from torchvision import models, transforms
 from torch.utils.data import DataLoader
 from torch import nn, optim
@@ -13,11 +12,10 @@ import time
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# Define transformations
+# Define transformations without normalization (handled by processor)
 transform = transforms.Compose([
     transforms.Resize((128, 128)),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    transforms.ToTensor()
 ])
 
 # Load the dataset and DataLoader
@@ -30,7 +28,7 @@ os.makedirs("logs", exist_ok=True)
 os.makedirs("plots", exist_ok=True)
 
 # Function to train and log performance
-def train_and_log(model, optimizer, criterion, model_name, epochs=5):
+def train_and_log(model, optimizer, criterion, model_name, processor=None, epochs=5):
     model.train()
     losses = []
     accuracies = []
@@ -44,16 +42,26 @@ def train_and_log(model, optimizer, criterion, model_name, epochs=5):
         total = 0
 
         for images, labels in dataloader:
-            images, labels = images.to(device), labels.to(device)  # Move data to selected device
+            labels = labels.to(device)  # Move labels to the selected device
+
+            if processor:
+                # Process images for Hugging Face DETR model
+                images = [img.cpu() for img in images]  # DETR processor works on CPU by default
+                inputs = processor(images=images, return_tensors="pt", do_rescale=False).to(device)
+                outputs = model(**inputs)
+                logits = outputs.logits[:, 0, :]  # Use the first detected object for binary classification
+            else:
+                # For MobileNet
+                images = images.to(device)
+                logits = model(images)
 
             optimizer.zero_grad()
-            outputs = model(images)["logits"] if hasattr(model, "class_embed") else model(images)
-            loss = criterion(outputs, labels)
+            loss = criterion(logits, labels)
             loss.backward()
             optimizer.step()
 
             running_loss += loss.item()
-            _, predicted = torch.max(outputs, 1)
+            _, predicted = torch.max(logits, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
@@ -92,15 +100,16 @@ def run_mobilenet(epochs=5):
     print(f"MobileNet SSD - Total Parameters: {sum(p.numel() for p in model.parameters())}")
     return train_and_log(model, optimizer, criterion, "MobileNet_SSD", epochs)
 
-# Train and log DETR
+# Train and log Hugging Face DETR
 def run_detr(epochs=5):
-    model = models.detection.detr_resnet50(pretrained=True)
-    model.class_embed = nn.Linear(model.class_embed.in_features, 2)
-    model = model.to(device)  # Move model to selected device
+    model = DetrForObjectDetection.from_pretrained("facebook/detr-resnet-50")
+    processor = DetrImageProcessor.from_pretrained("facebook/detr-resnet-50")
+    model.class_labels_classifier = nn.Linear(model.class_labels_classifier.in_features, 2)  # Binary classification
+    model = model.to(device)  # Move model to the selected device
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.0001)
     print(f"DETR - Total Parameters: {sum(p.numel() for p in model.parameters())}")
-    return train_and_log(model, optimizer, criterion, "DETR", epochs)
+    return train_and_log(model, optimizer, criterion, "DETR", processor, epochs)
 
 # Plot results
 def plot_results(mobilenet_metrics, detr_metrics):

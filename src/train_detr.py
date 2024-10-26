@@ -1,27 +1,30 @@
 import torch
-from torchvision import models, transforms
+from transformers import DetrForObjectDetection, DetrImageProcessor
 from torch.utils.data import DataLoader
 from torch import nn, optim
 from src.pet_dataset import OxfordPetsDataset
+from torchvision import transforms
 
 # Set device to GPU if available, otherwise CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# Define transformations
+# Define transformations without normalization (handled by processor)
 transform = transforms.Compose([
     transforms.Resize((128, 128)),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    transforms.ToTensor()
 ])
 
 # Load the dataset and DataLoader
 dataset = OxfordPetsDataset(root_dir='data/images', transform=transform)
 dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
 
-# Load DETR model and modify it for binary classification
-model = models.detection.detr_resnet50(pretrained=True)
-model.class_embed = nn.Linear(model.class_embed.in_features, 2)  # Adjust for 2 classes: cat and dog
+# Load the Hugging Face DETR model and processor
+model = DetrForObjectDetection.from_pretrained("facebook/detr-resnet-50")
+processor = DetrImageProcessor.from_pretrained("facebook/detr-resnet-50")
+
+# Adjust for binary classification (cats and dogs)
+model.class_labels_classifier = nn.Linear(model.class_labels_classifier.in_features, 2)
 model = model.to(device)  # Move model to the selected device
 
 # Define loss function and optimizer
@@ -37,16 +40,22 @@ def train_detr(epochs=5):
         total = 0
 
         for images, labels in dataloader:
-            images, labels = images.to(device), labels.to(device)  # Move data to selected device
+            # Move data to selected device and preprocess images
+            images = [img.cpu() for img in images]  # DETR processor works on CPU by default
+            labels = labels.to(device)
+            inputs = processor(images=images, return_tensors="pt", do_rescale=False).to(device)
 
             optimizer.zero_grad()
-            outputs = model(images)["logits"]
-            loss = criterion(outputs, labels)
+            outputs = model(**inputs)
+
+            # Use only the primary object logits for classification
+            logits = outputs.logits[:, 0, :]  # Taking the first detected object
+            loss = criterion(logits, labels)
             loss.backward()
             optimizer.step()
 
             running_loss += loss.item()
-            _, predicted = torch.max(outputs, 1)
+            _, predicted = torch.max(logits, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 

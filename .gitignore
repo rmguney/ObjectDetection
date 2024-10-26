@@ -1,5 +1,5 @@
 # Ignore virtual environment
-pets_env/
+env/
 
 # Ignore dataset files
 data/
@@ -17,6 +17,3 @@ Thumbs.db
 
 # Ignore IDE-specific files (e.g., for VSCode)
 .vscode/
-
-# dataset
-.data
