@@ -98,7 +98,9 @@ def run_mobilenet(epochs=5):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     print(f"MobileNet SSD - Total Parameters: {sum(p.numel() for p in model.parameters())}")
-    return train_and_log(model, optimizer, criterion, "MobileNet_SSD", epochs)
+    
+    # Explicitly set processor=None to prevent errors
+    return train_and_log(model, optimizer, criterion, "MobileNet_SSD", processor=None, epochs=epochs)
 
 # Train and log Hugging Face DETR
 def run_detr(epochs=5):
@@ -135,8 +137,8 @@ def plot_results(mobilenet_metrics, detr_metrics):
     fig.savefig("plots/model_comparison.png")
     plt.show()
 
-if __name__ == "__main__":
-    epochs = 5
+# Define main function to be called from main.py
+def main(epochs=5):
     print("Training MobileNet SSD...")
     mobilenet_metrics = run_mobilenet(epochs)
 
@@ -145,3 +147,6 @@ if __name__ == "__main__":
 
     print("Plotting results...")
     plot_results(mobilenet_metrics, detr_metrics)
+
+if __name__ == "__main__":
+    main()
