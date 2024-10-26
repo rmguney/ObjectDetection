@@ -1,9 +1,13 @@
+# src/compare_models.py
+
 import torch
 from torchvision import models, transforms
 from torch.utils.data import DataLoader
 from torch import nn, optim
 from src.pet_dataset import OxfordPetsDataset
 import matplotlib.pyplot as plt
+import os
+import time
 
 # Set device to GPU if available, otherwise CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -20,13 +24,21 @@ transform = transforms.Compose([
 dataset = OxfordPetsDataset(root_dir='data/images', transform=transform)
 dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
 
+# Create directories for saving models, logs, and plots
+os.makedirs("saved_models", exist_ok=True)
+os.makedirs("logs", exist_ok=True)
+os.makedirs("plots", exist_ok=True)
+
 # Function to train and log performance
-def train_and_log(model, optimizer, criterion, epochs=5):
+def train_and_log(model, optimizer, criterion, model_name, epochs=5):
     model.train()
     losses = []
     accuracies = []
 
+    start_time = time.time()  # Start time for training
+
     for epoch in range(epochs):
+        epoch_start = time.time()
         running_loss = 0.0
         correct = 0
         total = 0
@@ -49,9 +61,25 @@ def train_and_log(model, optimizer, criterion, epochs=5):
         epoch_accuracy = 100 * correct / total
         losses.append(epoch_loss)
         accuracies.append(epoch_accuracy)
-        print(f"Epoch [{epoch+1}/{epochs}], Loss: {epoch_loss:.4f}, Accuracy: {epoch_accuracy:.2f}%")
+        epoch_end = time.time()
+        print(f"{model_name} - Epoch [{epoch+1}/{epochs}], Loss: {epoch_loss:.4f}, Accuracy: {epoch_accuracy:.2f}%, Time: {epoch_end - epoch_start:.2f} sec")
 
-    return losses, accuracies
+    total_time = time.time() - start_time
+    avg_time_per_epoch = total_time / epochs
+
+    # Save model checkpoint
+    torch.save(model.state_dict(), f"saved_models/{model_name}_checkpoint.pth")
+    # Save logs
+    with open(f"logs/{model_name}_log.txt", "w") as f:
+        for loss, acc in zip(losses, accuracies):
+            f.write(f"Loss: {loss}, Accuracy: {acc}\n")
+        f.write(f"\nTotal Training Time: {total_time:.2f} seconds\n")
+        f.write(f"Average Time per Epoch: {avg_time_per_epoch:.2f} seconds\n")
+
+    print(f"{model_name} Total Training Time: {total_time:.2f} seconds")
+    print(f"{model_name} Average Time per Epoch: {avg_time_per_epoch:.2f} seconds")
+
+    return losses, accuracies, total_time, avg_time_per_epoch
 
 # Train and log MobileNet SSD
 def run_mobilenet(epochs=5):
@@ -61,7 +89,8 @@ def run_mobilenet(epochs=5):
     model = model.to(device)  # Move model to selected device
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
-    return train_and_log(model, optimizer, criterion, epochs)
+    print(f"MobileNet SSD - Total Parameters: {sum(p.numel() for p in model.parameters())}")
+    return train_and_log(model, optimizer, criterion, "MobileNet_SSD", epochs)
 
 # Train and log DETR
 def run_detr(epochs=5):
@@ -70,7 +99,8 @@ def run_detr(epochs=5):
     model = model.to(device)  # Move model to selected device
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.0001)
-    return train_and_log(model, optimizer, criterion, epochs)
+    print(f"DETR - Total Parameters: {sum(p.numel() for p in model.parameters())}")
+    return train_and_log(model, optimizer, criterion, "DETR", epochs)
 
 # Plot results
 def plot_results(mobilenet_metrics, detr_metrics):
@@ -92,6 +122,8 @@ def plot_results(mobilenet_metrics, detr_metrics):
     axs[1].set_ylabel("Accuracy (%)")
     axs[1].legend()
 
+    # Save the plot as an image
+    fig.savefig("plots/model_comparison.png")
     plt.show()
 
 if __name__ == "__main__":
