@@ -1,4 +1,3 @@
-# main.py
 import subprocess
 
 def main():
@@ -19,7 +18,7 @@ def main():
     elif choice == "2":
         # Launch GUI for manual testing
         subprocess.run(["python", "src/gui_test.py"])
-    elif choice == "3":
+    elif choice == "3": 
         from src.train_mobilenet import train_mobilenet
         epochs = int(input("Enter number of epochs for MobileNet SSD: "))
         train_mobilenet(epochs=epochs)
