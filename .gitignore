@@ -17,3 +17,6 @@ Thumbs.db
 
 # Ignore IDE-specific files (e.g., for VSCode)
 .vscode/
+
+# dataset
+.data
