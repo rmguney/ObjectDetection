@@ -41,19 +41,20 @@ def train_and_log(model, optimizer, criterion, model_name, processor=None, epoch
         correct = 0
         total = 0
 
-        for images, labels in dataloader:
-            labels = labels.to(device)  # Move labels to the selected device
+# Updated processing section within `train_and_log` to optimize device handling:
+    for images, labels in dataloader:
+        labels = labels.to(device)  # Move labels to the selected device
 
-            if processor:
-                # Process images for Hugging Face DETR model
-                images = [img.cpu() for img in images]  # DETR processor works on CPU by default
-                inputs = processor(images=images, return_tensors="pt", do_rescale=False).to(device)
-                outputs = model(**inputs)
-                logits = outputs.logits[:, 0, :]  # Use the first detected object for binary classification
-            else:
-                # For MobileNet
-                images = images.to(device)
-                logits = model(images)
+        if processor:
+            # Process images for Hugging Face DETR model
+            inputs = processor(images=images, return_tensors="pt", do_rescale=False)
+            inputs = {key: value.to(device) for key, value in inputs.items()}  # Move all inputs to device
+            outputs = model(**inputs)
+            logits = outputs.logits[:, 0, :]  # Use the first detected object for binary classification
+        else:
+            # For MobileNet or other classification models
+            images = images.to(device)
+            logits = model(images)
 
             optimizer.zero_grad()
             loss = criterion(logits, labels)

@@ -1,4 +1,5 @@
 import torch
+from transformers import DetrForObjectDetection
 from torchvision import models, transforms
 from torch.utils.data import DataLoader
 from torch import nn, optim
@@ -11,7 +12,7 @@ import time
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# Define transformations
+# Define transformations (standardized for all models)
 transform = transforms.Compose([
     transforms.Resize((128, 128)),
     transforms.ToTensor(),
@@ -46,12 +47,14 @@ def train_and_log(model, optimizer, criterion, model_name, epochs=5):
 
             optimizer.zero_grad()
             outputs = model(images)
-            loss = criterion(outputs, labels)
+            # Handle DETR's output specifically by selecting the logits of the first detected object
+            logits = outputs.logits[:, 0, :] if hasattr(outputs, 'logits') else outputs
+            loss = criterion(logits, labels)
             loss.backward()
             optimizer.step()
 
             running_loss += loss.item()
-            _, predicted = torch.max(outputs, 1)
+            _, predicted = torch.max(logits, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
@@ -83,7 +86,7 @@ def train_and_log(model, optimizer, criterion, model_name, epochs=5):
 def run_resnet(epochs=5):
     model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
     model.fc = nn.Linear(model.fc.in_features, 2)  # Adjust for binary classification (cat vs dog)
-    model = model.to(device)  # Move model to selected device
+    model = model.to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     print(f"ResNet - Total Parameters: {sum(p.numel() for p in model.parameters())}")
@@ -94,20 +97,32 @@ def run_resnet(epochs=5):
 def run_mobilenet(epochs=5):
     model = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.IMAGENET1K_V1)
     model.classifier[1] = nn.Linear(model.classifier[1].in_features, 2)  # Binary classification
-    model = model.to(device)  # Move model to selected device
+    model = model.to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     print(f"MobileNet - Total Parameters: {sum(p.numel() for p in model.parameters())}")
     
     return train_and_log(model, optimizer, criterion, "MobileNet", epochs=epochs)
 
+# Train and log Hugging Face DETR
+def run_detr(epochs=5):
+    model = DetrForObjectDetection.from_pretrained("facebook/detr-resnet-50")
+    model.class_labels_classifier = nn.Linear(model.class_labels_classifier.in_features, 2)  # Binary classification
+    model = model.to(device)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+    print(f"DETR - Total Parameters: {sum(p.numel() for p in model.parameters())}")
+    
+    return train_and_log(model, optimizer, criterion, "DETR", epochs=epochs)
+
 # Plot results
-def plot_results(resnet_metrics, mobilenet_metrics):
+def plot_results(resnet_metrics, mobilenet_metrics, detr_metrics):
     fig, axs = plt.subplots(1, 2, figsize=(12, 5))
 
     # Plot losses
     axs[0].plot(resnet_metrics[0], label="ResNet")
-    axs[0].plot(mobilenet_metrics[0], label="MobileNet")
+    axs[0].plot(mobilenet_metrics[0], plot="MobileNet")
+    axs[0].plot(detr_metrics[0], label="DETR")
     axs[0].set_title("Training Loss over Epochs")
     axs[0].set_xlabel("Epochs")
     axs[0].set_ylabel("Loss")
@@ -116,6 +131,7 @@ def plot_results(resnet_metrics, mobilenet_metrics):
     # Plot accuracies
     axs[1].plot(resnet_metrics[1], label="ResNet")
     axs[1].plot(mobilenet_metrics[1], label="MobileNet")
+    axs[1].plot(detr_metrics[1], label="DETR")
     axs[1].set_title("Training Accuracy over Epochs")
     axs[1].set_xlabel("Epochs")
     axs[1].set_ylabel("Accuracy (%)")
@@ -133,8 +149,11 @@ def main(epochs=5):
     print("Training MobileNet...")
     mobilenet_metrics = run_mobilenet(epochs)
 
+    print("Training DETR...")
+    detr_metrics = run_detr(epochs)
+
     print("Plotting results...")
-    plot_results(resnet_metrics, mobilenet_metrics)
+    plot_results(resnet_metrics, mobilenet_metrics, detr_metrics)
 
 if __name__ == "__main__":
     main()
