@@ -5,17 +5,22 @@ from torch import nn, optim
 from src.pet_dataset import OxfordPetsDataset
 import matplotlib.pyplot as plt
 
-# Set up transformations and dataset
+# Set device to GPU if available, otherwise CPU
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+
+# Define transformations
 transform = transforms.Compose([
     transforms.Resize((128, 128)),
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
+# Load the dataset and DataLoader
 dataset = OxfordPetsDataset(root_dir='data/images', transform=transform)
 dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
 
-# Define a function to train and log performance
+# Function to train and log performance
 def train_and_log(model, optimizer, criterion, epochs=5):
     model.train()
     losses = []
@@ -25,10 +30,12 @@ def train_and_log(model, optimizer, criterion, epochs=5):
         running_loss = 0.0
         correct = 0
         total = 0
-        
+
         for images, labels in dataloader:
+            images, labels = images.to(device), labels.to(device)  # Move data to selected device
+
             optimizer.zero_grad()
-            outputs = model(images)
+            outputs = model(images)["logits"] if hasattr(model, "class_embed") else model(images)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -51,6 +58,7 @@ def run_mobilenet(epochs=5):
     from torchvision.models import MobileNet_V2_Weights
     model = models.mobilenet_v2(weights=MobileNet_V2_Weights.IMAGENET1K_V1)
     model.classifier[1] = nn.Linear(model.classifier[1].in_features, 2)
+    model = model.to(device)  # Move model to selected device
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     return train_and_log(model, optimizer, criterion, epochs)
@@ -59,6 +67,7 @@ def run_mobilenet(epochs=5):
 def run_detr(epochs=5):
     model = models.detection.detr_resnet50(pretrained=True)
     model.class_embed = nn.Linear(model.class_embed.in_features, 2)
+    model = model.to(device)  # Move model to selected device
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.0001)
     return train_and_log(model, optimizer, criterion, epochs)
@@ -66,7 +75,7 @@ def run_detr(epochs=5):
 # Plot results
 def plot_results(mobilenet_metrics, detr_metrics):
     fig, axs = plt.subplots(1, 2, figsize=(12, 5))
-    
+
     # Plot losses
     axs[0].plot(mobilenet_metrics[0], label="MobileNet SSD")
     axs[0].plot(detr_metrics[0], label="DETR")
@@ -89,9 +98,9 @@ if __name__ == "__main__":
     epochs = 5
     print("Training MobileNet SSD...")
     mobilenet_metrics = run_mobilenet(epochs)
-    
+
     print("Training DETR...")
     detr_metrics = run_detr(epochs)
-    
+
     print("Plotting results...")
     plot_results(mobilenet_metrics, detr_metrics)

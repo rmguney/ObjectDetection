@@ -1,19 +1,26 @@
+# src/gui_test.py
+
 import torch
 from torchvision import models, transforms
 from PIL import Image, ImageTk
 import tkinter as tk
 from tkinter import filedialog, Label, Button, OptionMenu, StringVar
-import tkinter.messagebox as messagebox
+from torch import nn
+
+# Set device to GPU if available, otherwise CPU
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
 
 def load_model(model_choice):
     if model_choice == "MobileNet SSD":
         from torchvision.models import MobileNet_V2_Weights
         model = models.mobilenet_v2(weights=MobileNet_V2_Weights.IMAGENET1K_V1)
-        model.classifier[1] = torch.nn.Linear(model.classifier[1].in_features, 2)
+        model.classifier[1] = nn.Linear(model.classifier[1].in_features, 2)
     elif model_choice == "DETR":
         model = models.detection.detr_resnet50(pretrained=True)
-        model.class_embed = torch.nn.Linear(model.class_embed.in_features, 2)
-    model.eval()  # Set to evaluation mode
+        model.class_embed = nn.Linear(model.class_embed.in_features, 2)
+    model = model.to(device)  # Move model to the selected device
+    model.eval()  # Set model to evaluation mode
     return model
 
 def preprocess_image(image_path):
@@ -23,7 +30,7 @@ def preprocess_image(image_path):
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
     image = Image.open(image_path).convert("RGB")
-    return transform(image).unsqueeze(0)  # Add batch dimension
+    return transform(image).unsqueeze(0).to(device)  # Add batch dimension and move to device
 
 def predict_image(model, image_tensor):
     with torch.no_grad():
@@ -33,7 +40,7 @@ def predict_image(model, image_tensor):
     return label
 
 def select_image():
-    global img_label, prediction_label, model_choice
+    global img_label, prediction_label
 
     # Open file dialog to select an image
     image_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg;*.jpeg;*.png")])

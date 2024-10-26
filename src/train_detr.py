@@ -1,9 +1,12 @@
 import torch
-from torchvision.models.detection import detr_resnet50
+from torchvision import models, transforms
 from torch.utils.data import DataLoader
 from torch import nn, optim
-from torchvision import transforms
 from src.pet_dataset import OxfordPetsDataset
+
+# Set device to GPU if available, otherwise CPU
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
 
 # Define transformations
 transform = transforms.Compose([
@@ -17,8 +20,9 @@ dataset = OxfordPetsDataset(root_dir='data/images', transform=transform)
 dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
 
 # Load DETR model and modify it for binary classification
-model = detr_resnet50(pretrained=True)
-model.class_embed = nn.Linear(model.class_embed.in_features, 2)  # Adjust for 2 classes (cat and dog)
+model = models.detection.detr_resnet50(pretrained=True)
+model.class_embed = nn.Linear(model.class_embed.in_features, 2)  # Adjust for 2 classes: cat and dog
+model = model.to(device)  # Move model to the selected device
 
 # Define loss function and optimizer
 criterion = nn.CrossEntropyLoss()
@@ -33,6 +37,8 @@ def train_detr(epochs=5):
         total = 0
 
         for images, labels in dataloader:
+            images, labels = images.to(device), labels.to(device)  # Move data to selected device
+
             optimizer.zero_grad()
             outputs = model(images)["logits"]
             loss = criterion(outputs, labels)
@@ -45,7 +51,9 @@ def train_detr(epochs=5):
             correct += (predicted == labels).sum().item()
 
         # Print statistics per epoch
-        print(f"Epoch [{epoch+1}/{epochs}], Loss: {running_loss/len(dataloader):.4f}, Accuracy: {100 * correct / total:.2f}%")
+        epoch_loss = running_loss / len(dataloader)
+        epoch_accuracy = 100 * correct / total
+        print(f"Epoch [{epoch+1}/{epochs}], Loss: {epoch_loss:.4f}, Accuracy: {epoch_accuracy:.2f}%")
 
     print("DETR training complete.")
 
