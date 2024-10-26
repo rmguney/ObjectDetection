@@ -1,0 +1,83 @@
+import torch
+from torchvision import models, transforms
+from PIL import Image, ImageTk
+import tkinter as tk
+from tkinter import filedialog, Label, Button, OptionMenu, StringVar
+import tkinter.messagebox as messagebox
+
+def load_model(model_choice):
+    if model_choice == "MobileNet SSD":
+        from torchvision.models import MobileNet_V2_Weights
+        model = models.mobilenet_v2(weights=MobileNet_V2_Weights.IMAGENET1K_V1)
+        model.classifier[1] = torch.nn.Linear(model.classifier[1].in_features, 2)
+    elif model_choice == "DETR":
+        model = models.detection.detr_resnet50(pretrained=True)
+        model.class_embed = torch.nn.Linear(model.class_embed.in_features, 2)
+    model.eval()  # Set to evaluation mode
+    return model
+
+def preprocess_image(image_path):
+    transform = transforms.Compose([
+        transforms.Resize((128, 128)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
+    image = Image.open(image_path).convert("RGB")
+    return transform(image).unsqueeze(0)  # Add batch dimension
+
+def predict_image(model, image_tensor):
+    with torch.no_grad():
+        outputs = model(image_tensor) if isinstance(model, models.MobileNetV2) else model(image_tensor)["logits"]
+        _, predicted = torch.max(outputs, 1)
+    label = "Dog" if predicted.item() == 1 else "Cat"
+    return label
+
+def select_image():
+    global img_label, prediction_label, model_choice
+
+    # Open file dialog to select an image
+    image_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg;*.jpeg;*.png")])
+    if not image_path:
+        return
+
+    # Load the chosen model
+    model = load_model(model_choice.get())
+
+    # Load and preprocess the selected image
+    image_tensor = preprocess_image(image_path)
+    label = predict_image(model, image_tensor)
+
+    # Display the image in the GUI
+    image = Image.open(image_path)
+    image.thumbnail((200, 200))
+    img = ImageTk.PhotoImage(image)
+    img_label.config(image=img)
+    img_label.image = img
+
+    # Show prediction result
+    prediction_label.config(text=f"Predicted Label: {label}")
+
+# Initialize GUI
+root = tk.Tk()
+root.title("Image Classifier")
+root.geometry("300x500")
+
+# Model selection dropdown
+model_choice = StringVar(root)
+model_choice.set("MobileNet SSD")  # default value
+options = ["MobileNet SSD", "DETR"]
+model_selector = OptionMenu(root, model_choice, *options)
+model_selector.pack(pady=10)
+
+# Add UI elements
+img_label = Label(root)
+img_label.pack(pady=20)
+
+select_button = Button(root, text="Select Image", command=select_image)
+select_button.pack()
+
+prediction_label = Label(root, text="Predicted Label: ", font=("Arial", 14))
+prediction_label.pack(pady=20)
+
+# Start the GUI
+root.mainloop()

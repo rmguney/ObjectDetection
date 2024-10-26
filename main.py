@@ -1,3 +1,5 @@
+import subprocess
+
 def main():
     print("Select an option:")
     print("1. Train MobileNet SSD")
@@ -5,6 +7,7 @@ def main():
     print("3. Test MobileNet SSD")
     print("4. Test DETR")
     print("5. Test Dataset")
+    print("6. Launch GUI for Manual Testing")
     choice = input("Enter the number of your choice: ")
 
     if choice == "1":
@@ -24,8 +27,11 @@ def main():
     elif choice == "5":
         from src.test_dataset import test_dataset
         test_dataset()
+    elif choice == "6":
+        # Launch GUI for manual testing
+        subprocess.run(["python", "src/gui_test.py"])
     else:
-        print("Invalid choice. Please select 1, 2, 3, 4, or 5.")
+        print("Invalid choice. Please select 1, 2, 3, 4, 5, or 6.")
 
 if __name__ == "__main__":
     main()
