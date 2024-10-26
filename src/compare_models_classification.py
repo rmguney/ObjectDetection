@@ -82,17 +82,6 @@ def train_and_log(model, optimizer, criterion, model_name, epochs=5):
 
     return losses, accuracies, total_time, avg_time_per_epoch
 
-# Train and log ResNet
-def run_resnet(epochs=5):
-    model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
-    model.fc = nn.Linear(model.fc.in_features, 2)  # Adjust for binary classification (cat vs dog)
-    model = model.to(device)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    print(f"ResNet - Total Parameters: {sum(p.numel() for p in model.parameters())}")
-    
-    return train_and_log(model, optimizer, criterion, "ResNet", epochs=epochs)
-
 # Train and log MobileNet
 def run_mobilenet(epochs=5):
     model = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.IMAGENET1K_V1)
@@ -116,12 +105,11 @@ def run_detr(epochs=5):
     return train_and_log(model, optimizer, criterion, "DETR", epochs=epochs)
 
 # Plot results
-def plot_results(resnet_metrics, mobilenet_metrics, detr_metrics):
+def plot_results(mobilenet_metrics, detr_metrics):
     fig, axs = plt.subplots(1, 2, figsize=(12, 5))
 
     # Plot losses
-    axs[0].plot(resnet_metrics[0], label="ResNet")
-    axs[0].plot(mobilenet_metrics[0], plot="MobileNet")
+    axs[0].plot(mobilenet_metrics[0], label="MobileNet")
     axs[0].plot(detr_metrics[0], label="DETR")
     axs[0].set_title("Training Loss over Epochs")
     axs[0].set_xlabel("Epochs")
@@ -129,7 +117,6 @@ def plot_results(resnet_metrics, mobilenet_metrics, detr_metrics):
     axs[0].legend()
 
     # Plot accuracies
-    axs[1].plot(resnet_metrics[1], label="ResNet")
     axs[1].plot(mobilenet_metrics[1], label="MobileNet")
     axs[1].plot(detr_metrics[1], label="DETR")
     axs[1].set_title("Training Accuracy over Epochs")
@@ -143,9 +130,6 @@ def plot_results(resnet_metrics, mobilenet_metrics, detr_metrics):
 
 # Define main function to be called from main.py
 def main(epochs=5):
-    print("Training ResNet...")
-    resnet_metrics = run_resnet(epochs)
-
     print("Training MobileNet...")
     mobilenet_metrics = run_mobilenet(epochs)
 
@@ -153,7 +137,7 @@ def main(epochs=5):
     detr_metrics = run_detr(epochs)
 
     print("Plotting results...")
-    plot_results(resnet_metrics, mobilenet_metrics, detr_metrics)
+    plot_results(mobilenet_metrics, detr_metrics)
 
 if __name__ == "__main__":
     main()
