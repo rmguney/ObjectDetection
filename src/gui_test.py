@@ -1,4 +1,5 @@
 import torch
+from transformers import DetrForObjectDetection, DetrImageProcessor
 from torchvision import models, transforms
 from PIL import Image, ImageTk
 import tkinter as tk
@@ -10,31 +11,43 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
 def load_model(model_choice):
-    if model_choice == "MobileNet SSD":
+    if model_choice == "MobileNet":
         from torchvision.models import MobileNet_V2_Weights
         model = models.mobilenet_v2(weights=MobileNet_V2_Weights.IMAGENET1K_V1)
         model.classifier[1] = nn.Linear(model.classifier[1].in_features, 2)
     elif model_choice == "DETR":
-        model = models.detection.detr_resnet50(pretrained=True)
-        model.class_embed = nn.Linear(model.class_embed.in_features, 2)
+        model = DetrForObjectDetection.from_pretrained("facebook/detr-resnet-50")
+        model.class_labels_classifier = nn.Linear(model.class_labels_classifier.in_features, 2)
     model = model.to(device)  # Move model to the selected device
     model.eval()  # Set model to evaluation mode
     return model
 
-def preprocess_image(image_path):
-    transform = transforms.Compose([
-        transforms.Resize((128, 128)),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
-    image = Image.open(image_path).convert("RGB")
-    return transform(image).unsqueeze(0).to(device)  # Add batch dimension and move to device
+def preprocess_image(image_path, model_choice):
+    if model_choice == "MobileNet":
+        transform = transforms.Compose([
+            transforms.Resize((128, 128)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+        image = Image.open(image_path).convert("RGB")
+        return transform(image).unsqueeze(0).to(device)  # Add batch dimension and move to device
+    elif model_choice == "DETR":
+        processor = DetrImageProcessor.from_pretrained("facebook/detr-resnet-50")
+        image = Image.open(image_path).convert("RGB")
+        inputs = processor(images=image, return_tensors="pt").to(device)
+        return inputs
 
-def predict_image(model, image_tensor):
+def predict_image(model, image_tensor, model_choice):
     with torch.no_grad():
-        outputs = model(image_tensor) if isinstance(model, models.MobileNetV2) else model(image_tensor)["logits"]
-        _, predicted = torch.max(outputs, 1)
-    label = "Dog" if predicted.item() == 1 else "Cat"
+        if model_choice == "MobileNet":
+            outputs = model(image_tensor)
+            _, predicted = torch.max(outputs, 1)
+            label = "Dog" if predicted.item() == 1 else "Cat"
+        elif model_choice == "DETR":
+            outputs = model(**image_tensor)
+            logits = outputs.logits[:, 0, :]  # Use the primary object logits for binary classification
+            predicted_class = logits.argmax(dim=-1).item()
+            label = "Dog" if predicted_class == 1 else "Cat"
     return label
 
 def select_image():
@@ -49,8 +62,8 @@ def select_image():
     model = load_model(model_choice.get())
 
     # Load and preprocess the selected image
-    image_tensor = preprocess_image(image_path)
-    label = predict_image(model, image_tensor)
+    image_tensor = preprocess_image(image_path, model_choice.get())
+    label = predict_image(model, image_tensor, model_choice.get())
 
     # Display the image in the GUI
     image = Image.open(image_path)
@@ -69,8 +82,8 @@ root.geometry("300x500")
 
 # Model selection dropdown
 model_choice = StringVar(root)
-model_choice.set("MobileNet SSD")  # default value
-options = ["MobileNet SSD", "DETR"]
+model_choice.set("MobileNet")  # default value
+options = ["MobileNet", "DETR"]
 model_selector = OptionMenu(root, model_choice, *options)
 model_selector.pack(pady=10)
 
