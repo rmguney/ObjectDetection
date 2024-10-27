@@ -56,7 +56,7 @@ def train_mobilenet(epochs=5):
         epoch_accuracy = 100 * correct / total
         print(f"Epoch [{epoch+1}/{epochs}], Loss: {epoch_loss:.4f}, Accuracy: {epoch_accuracy:.2f}%")
 
-    print("MobileNet SSD training complete.")
+    print("MobileNet training complete.")
 
 # Run the training function
 if __name__ == "__main__":

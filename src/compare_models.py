@@ -41,20 +41,20 @@ def train_and_log(model, optimizer, criterion, model_name, processor=None, epoch
         correct = 0
         total = 0
 
-# Updated processing section within `train_and_log` to optimize device handling:
-    for images, labels in dataloader:
-        labels = labels.to(device)  # Move labels to the selected device
+        # Updated processing section within `train_and_log` to optimize device handling:
+        for images, labels in dataloader:
+            labels = labels.to(device)  # Move labels to the selected device
 
-        if processor:
-            # Process images for Hugging Face DETR model
-            inputs = processor(images=images, return_tensors="pt", do_rescale=False)
-            inputs = {key: value.to(device) for key, value in inputs.items()}  # Move all inputs to device
-            outputs = model(**inputs)
-            logits = outputs.logits[:, 0, :]  # Use the first detected object for binary classification
-        else:
-            # For MobileNet or other classification models
-            images = images.to(device)
-            logits = model(images)
+            if processor:
+                # Process images for Hugging Face DETR model
+                inputs = processor(images=images, return_tensors="pt", do_rescale=False)
+                inputs = {key: value.to(device) for key, value in inputs.items()}  # Move all inputs to device
+                outputs = model(**inputs)
+                logits = outputs.logits[:, 0, :]  # Use the first detected object for binary classification
+            else:
+                # For MobileNet or other classification models
+                images = images.to(device)
+                logits = model(images)
 
             optimizer.zero_grad()
             loss = criterion(logits, labels)
@@ -90,7 +90,7 @@ def train_and_log(model, optimizer, criterion, model_name, processor=None, epoch
 
     return losses, accuracies, total_time, avg_time_per_epoch
 
-# Train and log MobileNet SSD
+# Train and log MobileNet
 def run_mobilenet(epochs=5):
     from torchvision.models import MobileNet_V2_Weights
     model = models.mobilenet_v2(weights=MobileNet_V2_Weights.IMAGENET1K_V1)
@@ -98,10 +98,10 @@ def run_mobilenet(epochs=5):
     model = model.to(device)  # Move model to selected device
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
-    print(f"MobileNet SSD - Total Parameters: {sum(p.numel() for p in model.parameters())}")
+    print(f"MobileNet - Total Parameters: {sum(p.numel() for p in model.parameters())}")
     
     # Explicitly set processor=None to prevent errors
-    return train_and_log(model, optimizer, criterion, "MobileNet_SSD", processor=None, epochs=epochs)
+    return train_and_log(model, optimizer, criterion, "MobileNet", processor=None, epochs=epochs)
 
 # Train and log Hugging Face DETR
 def run_detr(epochs=5):
@@ -119,7 +119,7 @@ def plot_results(mobilenet_metrics, detr_metrics):
     fig, axs = plt.subplots(1, 2, figsize=(12, 5))
 
     # Plot losses
-    axs[0].plot(mobilenet_metrics[0], label="MobileNet SSD")
+    axs[0].plot(mobilenet_metrics[0], label="MobileNet")
     axs[0].plot(detr_metrics[0], label="DETR")
     axs[0].set_title("Training Loss over Epochs")
     axs[0].set_xlabel("Epochs")
@@ -127,7 +127,7 @@ def plot_results(mobilenet_metrics, detr_metrics):
     axs[0].legend()
 
     # Plot accuracies
-    axs[1].plot(mobilenet_metrics[1], label="MobileNet SSD")
+    axs[1].plot(mobilenet_metrics[1], label="MobileNet")
     axs[1].plot(detr_metrics[1], label="DETR")
     axs[1].set_title("Training Accuracy over Epochs")
     axs[1].set_xlabel("Epochs")
@@ -140,7 +140,7 @@ def plot_results(mobilenet_metrics, detr_metrics):
 
 # Define main function to be called from main.py
 def main(epochs=5):
-    print("Training MobileNet SSD...")
+    print("Training MobileNet...")
     mobilenet_metrics = run_mobilenet(epochs)
 
     print("Training DETR...")
